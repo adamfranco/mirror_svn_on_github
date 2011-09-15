@@ -1,0 +1,46 @@
+#!/bin/env php
+<?php
+chdir('/home/afranco/private_html/phpcas/');
+
+// Fetch from svn.
+`git svn fetch`;
+
+// Lookup all of the svn branches
+$svnBranches = explode("\n", trim(`git branch -r | grep -v '/' | grep -v trunk`));
+$svnBranches = array_map('trim', $svnBranches);
+
+// Add all of our branches to the list of those to push
+$cmd = 'git push --tags github refs/remotes/trunk:refs/heads/master ';
+foreach ($svnBranches as $branch) {
+	$cmd .= 'refs/remotes/'.$branch.':refs/heads/'.$branch.' ';
+}
+
+// Ensure that Git tags are created for every SVN tag branch.
+$svnBranches = explode("\n", trim(`git branch -r | grep 'tags/'`));
+$svnBranches = array_map('trim', $svnBranches);
+foreach ($svnBranches as $svnTag) {
+	$ref = "refs/remotes/$svnTag";
+	$parent = shell_exec("git show --format=\"format:%P\" $ref");
+
+	// If there are no tags on the parent of the tag branch, add one.
+	if (!strlen(trim(`git tag --contains $parent`))) {
+		$message = shell_exec("git show --format=\"format:%s%ntagged by %aN on %aD\" $ref");
+		$date = shell_exec("git show --format=\"format:%ai\" $ref");
+		$tagName = str_replace('tags/', '', $svnTag);
+		
+		$tagCmd = 'GIT_COMMITTER_DATE="'.$date.'" git tag -a -m "'.$message.'" '.$tagName.' '.$parent;
+#		print $tagCmd ."\n";
+#		print "Creating tag $tagName\n";
+		`$tagCmd`;
+	}
+}
+
+#print $cmd;
+#print "\n";
+
+$output = `$cmd 2>&1`;
+
+if (trim($output) != 'Everything up-to-date')
+	print $output."\n";
+
+
